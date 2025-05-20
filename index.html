@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AES NFC Enkripsi</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+    h1 {
+      text-align: center;
+    }
+    input, textarea, button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .box {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      max-width: 500px;
+      margin: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Enkripsi & NFC</h1>
+
+    <label>Masukkan Teks:</label>
+    <textarea id="inputText" rows="4"></textarea>
+
+    <label>Key (16 karakter):</label>
+    <input type="text" id="keyInput" maxlength="16"/>
+
+    <button onclick="encryptAndWrite()">Enkripsi & Tulis ke NFC</button>
+
+    <hr/>
+
+    <button onclick="readAndDecrypt()">Baca & Dekripsi dari NFC</button>
+    <p><strong>Hasil Dekripsi:</strong></p>
+    <div id="decryptedText" style="white-space: pre-wrap; background:#eee; padding:10px; border-radius:6px;"></div>
+  </div>
+
+  <script>
+    function encryptAndWrite() {
+      const text = document.getElementById("inputText").value.trim();
+      const key = document.getElementById("keyInput").value.trim();
+
+      if (key.length !== 16) {
+        alert("Key harus tepat 16 karakter.");
+        return;
+      }
+
+      if (!text) {
+        alert("Teks tidak boleh kosong.");
+        return;
+      }
+
+      const encrypted = CryptoJS.AES.encrypt(text, CryptoJS.enc.Utf8.parse(key), {
+        mode: CryptoJS.mode.ECB,
+        padding: CryptoJS.pad.Pkcs7
+      }).toString();
+
+      if ("NDEFWriter" in window) {
+        const writer = new NDEFWriter();
+        writer.write({ records: [{ recordType: "text", data: encrypted }] })
+          .then(() => {
+            alert("Berhasil menulis ke NFC.");
+          })
+          .catch(err => {
+            console.error(err);
+            alert("Gagal menulis ke NFC.");
+          });
+      } else {
+        alert("Browser tidak mendukung Web NFC.");
+      }
+    }
+
+    function readAndDecrypt() {
+      const key = document.getElementById("keyInput").value.trim();
+      if (key.length !== 16) {
+        alert("Key harus tepat 16 karakter.");
+        return;
+      }
+
+      if ("NDEFReader" in window) {
+        const reader = new NDEFReader();
+        reader.scan().then(() => {
+          reader.onreading = (event) => {
+            for (const record of event.message.records) {
+              if (record.recordType === "text") {
+                const textDecoder = new TextDecoder();
+                const encryptedText = textDecoder.decode(record.data);
+
+                try {
+                  const decrypted = CryptoJS.AES.decrypt(encryptedText, CryptoJS.enc.Utf8.parse(key), {
+                    mode: CryptoJS.mode.ECB,
+                    padding: CryptoJS.pad.Pkcs7
+                  });
+                  const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+
+                  if (plaintext) {
+                    document.getElementById("decryptedText").innerText = plaintext;
+                  } else {
+                    document.getElementById("decryptedText").innerText = "[Dekripsi gagal: Cek key atau data]";
+                  }
+                } catch (e) {
+                  console.error("Dekripsi error:", e);
+                  document.getElementById("decryptedText").innerText = "[Kesalahan saat dekripsi]";
+                }
+              }
+            }
+          };
+        }).catch(error => {
+          console.error(error);
+          alert("Izin NFC ditolak atau NFC tidak tersedia.");
+        });
+      } else {
+        alert("Browser tidak mendukung Web NFC.");
+      }
+    }
+  </script>
+</body>
+</html>
